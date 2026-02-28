@@ -16,6 +16,7 @@ import org.delcom.pam_p5_ifs23010.network.todos.data.ResponseTodoData
 import org.delcom.pam_p5_ifs23010.network.todos.data.ResponseUserData
 import org.delcom.pam_p5_ifs23010.network.todos.service.ITodoRepository
 import javax.inject.Inject
+import org.delcom.pam_p5_ifs23010.network.todos.data.ResponseTodoStatsData // pastikan di-import
 
 sealed interface ProfileUIState {
     data class Success(val data: ResponseUserData) : ProfileUIState
@@ -41,8 +42,15 @@ sealed interface TodoActionUIState {
     object Loading : TodoActionUIState
 }
 
+sealed interface StatsUIState {
+    data class Success(val data: ResponseTodoStatsData) : StatsUIState
+    data class Error(val message: String) : StatsUIState
+    object Loading : StatsUIState
+}
+
 data class UIStateTodo(
     val profile: ProfileUIState = ProfileUIState.Loading,
+    val stats: StatsUIState = StatsUIState.Loading,
     val todos: TodosUIState = TodosUIState.Loading,
     var todo: TodoUIState = TodoUIState.Loading,
     var todoAdd: TodoActionUIState = TodoActionUIState.Loading,
@@ -58,6 +66,11 @@ class TodoViewModel @Inject constructor(
 ) : ViewModel() {
     private val _uiState = MutableStateFlow(UIStateTodo())
     val uiState = _uiState.asStateFlow()
+
+    private var currentPage = 1
+    private var isLastPage = false
+    private var currentFilter: String? = null
+    private val currentTodosList = mutableListOf<ResponseTodoData>()
 
     fun getProfile(authToken: String) {
         viewModelScope.launch {
@@ -89,32 +102,67 @@ class TodoViewModel @Inject constructor(
         }
     }
 
-    fun getAllTodos(authToken: String, search: String? = null) {
+    fun resetAndGetAllTodos(authToken: String, search: String? = null, filter: String? = null) {
+        currentPage = 1
+        isLastPage = false
+        currentFilter = filter
+        currentTodosList.clear()
+        getAllTodos(authToken, search, currentFilter)
+    }
+
+    fun getAllTodos(authToken: String, search: String? = null, filter: String? = currentFilter) {
+        if (isLastPage) return // Jangan request jika data sudah habis
+
         viewModelScope.launch {
-            _uiState.update {
-                it.copy(
-                    todos = TodosUIState.Loading
-                )
+            if (currentPage == 1) {
+                _uiState.update { it.copy(todos = TodosUIState.Loading) }
             }
+
             _uiState.update { it ->
                 val tmpState = runCatching {
-                    repository.getTodos(authToken, search)
+                    repository.getTodos(authToken, search, currentPage, 10, filter)
                 }.fold(
-                    onSuccess = {
-                        if (it.status == "success") {
-                            TodosUIState.Success(it.data!!.todos)
+                    onSuccess = { response ->
+                        if (response.status == "success") {
+                            val newTodos = response.data!!.todos
+                            if (newTodos.size < 10) isLastPage = true // Data sudah habis
+
+                            currentTodosList.addAll(newTodos)
+                            currentPage++
+                            TodosUIState.Success(currentTodosList.toList())
                         } else {
-                            TodosUIState.Error(it.message)
+                            TodosUIState.Error(response.message)
                         }
                     },
-                    onFailure = {
-                        TodosUIState.Error(it.message ?: "Unknown error")
+                    onFailure = { error ->
+                        TodosUIState.Error(error.message ?: "Unknown error")
                     }
                 )
 
-                it.copy(
-                    todos = tmpState
+                it.copy(todos = tmpState)
+            }
+        }
+    }
+
+    fun getTodoStats(authToken: String) {
+        viewModelScope.launch {
+            _uiState.update { it.copy(stats = StatsUIState.Loading) }
+            _uiState.update { it ->
+                val tmpState = runCatching {
+                    repository.getTodoStats(authToken)
+                }.fold(
+                    onSuccess = { response ->
+                        if (response.status == "success") {
+                            StatsUIState.Success(response.data!!.stats)
+                        } else {
+                            StatsUIState.Error(response.message)
+                        }
+                    },
+                    onFailure = { error ->
+                        StatsUIState.Error(error.message ?: "Unknown error")
+                    }
                 )
+                it.copy(stats = tmpState)
             }
         }
     }

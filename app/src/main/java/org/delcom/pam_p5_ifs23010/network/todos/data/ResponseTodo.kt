@@ -28,3 +28,15 @@ data class ResponseTodoData(
 data class ResponseTodoAdd (
     val todoId: String
 )
+
+@Serializable
+data class ResponseTodoStats (
+    val stats: ResponseTodoStatsData
+)
+
+@Serializable
+data class ResponseTodoStatsData(
+    val total: Long = 0,
+    val complete: Long = 0,
+    val active: Long = 0
+)

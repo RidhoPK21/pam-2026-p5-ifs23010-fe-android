@@ -13,6 +13,7 @@ import org.delcom.pam_p5_ifs23010.network.todos.data.RequestUserChangePassword
 import org.delcom.pam_p5_ifs23010.network.todos.data.ResponseAuthLogin
 import org.delcom.pam_p5_ifs23010.network.todos.data.ResponseAuthRegister
 import org.delcom.pam_p5_ifs23010.network.todos.data.ResponseTodo
+import org.delcom.pam_p5_ifs23010.network.todos.data.ResponseTodoStats
 import org.delcom.pam_p5_ifs23010.network.todos.data.ResponseTodoAdd
 import org.delcom.pam_p5_ifs23010.network.todos.data.ResponseTodos
 import org.delcom.pam_p5_ifs23010.network.todos.data.ResponseUser
@@ -103,10 +104,21 @@ class TodoRepository(
 
     override suspend fun getTodos(
         authToken: String,
-        search: String?
+        search: String?,
+        page: Int,
+        perPage: Int,
+        filter: String?
     ): ResponseMessage<ResponseTodos?> {
         return SuspendHelper.safeApiCall {
-            apiService.getTodos("Bearer $authToken", search)
+            apiService.getTodos("Bearer $authToken", search, page, perPage, filter)
+        }
+    }
+
+    override suspend fun getTodoStats(
+        authToken: String
+    ): ResponseMessage<ResponseTodoStats?> {
+        return SuspendHelper.safeApiCall {
+            apiService.getTodoStats("Bearer $authToken")
         }
     }
 
